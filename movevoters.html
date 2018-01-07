@@ -1,0 +1,16 @@
+<html>
+<style>cal {font-family:cursive,roman;}</style>
+<h3>Move voters tool</h3>
+<p>This tool attempts to discover for a particular scoring rule whether there exists a Non-Convergent Nash Equilibrium where no on candidate can increase their score by changing their political position.</p>
+<p>Enter a scoring rule as a list of scores. For example "1 0 0 0" is Plurality (First Past the Post) on four candidates and "3 2 1" is Borda on three candidates. For each clustering of candidate positions it will say whether such a Nash Equilibrium exists with that clustering. Note that this tool will scale the scoring rule by some "Scale Factor" to ensure that the Linear Program is integer which hopefully prevents rounding being a problem.</p>
+You can add "C" to the string to switch to cumulative notation, so e.g. "C 1 1 1 1" means Borda on four candidates. You can add "v" to the string to increase verbosity of the output or "V" to increase the verbosity of the output further.
+"No NE: Non Zero Slope" means that no NE exists because a candidate with a unique position can increase their score by sliding slightly to the right or left.<br/>
+"No NE: No LP solution" means that there is no solution to the LP, so there is no NE.<br/>
+"No NE: (no gap) ..." means that we can only find a solution for an NE if we allow one political position to be infinitesimally different from another; since reals do not have infinitesimals no real valued NE exists.<br/>
+ "Exists NE: ..." means that we have found a solution and an NE exists.</p>
+<form action="cgi-bin/movevoters.cgi" method="GET" target="my_iframe">
+ <textarea name="i" cols=40 rows=4 onkeydown="if (event.keyCode == 13) { this.form.submit(); return false; }">1 0 0 0</textarea>
+ <input type="submit" value="Go"``>
+</form>
+<iframe name="my_iframe"  style="width:100%; height:100%;"></iframe>
+<html>
