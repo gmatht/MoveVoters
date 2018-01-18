@@ -1,7 +1,7 @@
 # MoveVoters
 This tool determines if a scoring rule has a Non-Convergent Nash Equilibrium.
 
-This is mostly likely to be interesting to you if you are interested in voting theory papers such as [Nonconvergent Electoral Equilibria under Scoring Rules: Beyond Plurality](https://arxiv.org/abs/1301.0152).
+This is mostly likely to be interesting to you if you are interested in voting theory papers.
 
 The easiest way to run this is use the [web app](http://www.dansted.org/movevoters.html). 
 
