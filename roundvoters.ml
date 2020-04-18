@@ -1,4 +1,11 @@
 (*
+Version of movevoters for circular voting positions case
+ACTUALLY CHANGE FOR ROUND CASE
+
+core of the program is get_lp that gets the Linear Program needed to solve the problem.
+
+
+
 TODO: Round floats for better precision, as they should be floats after scaling
 ./MoveVoters/ocaml-glpk-0.1.6/examples/example.ml
 
@@ -50,7 +57,7 @@ let string_of_floatarray = fun fl -> (string_of_floatlist (Array.to_list fl));;
 let println_sfl = fun s fl -> print_string (String.concat "\t" [s; string_of_floatlist fl;".\n"])
 let println_sil = fun s l -> print_string (String.concat " " [s; string_of_intlist l;".\n"])
 
-let rec list_tl_n l n = if n <= 0 then l else list_tl_n (List.tl l) (n - 1);;
+let rec list_tl_n l n = if n <= 0 then l else list_tl_n (List.tl l) (n - 1);; (* Remove first n elements from list *)
 (* Splits list l into two lists a, b, returns (rev a, b) 
    Note that it reverses the list a!! *)
 let rec split_list l n = if n <= 0 then ([],l) else 
@@ -218,9 +225,11 @@ let score_move_self_ frq_before scores =
 	sum_listf (list_tl_n scores sum_before)
 
 (* slope of score change if all candidates that share a position move to the right
- * Note that if this is an equilibrium, and frq(n)=1, then this slope must equal 0 *)
+ * Note that if this is an equilibrium, and frq(n)=1, then this slope must equal 0
+   IN ROUND CASE THIS ALWAYS EQUALS 0 *)
 let score_move_self = fun frq_before frq_after scores ->
-	((score_move_self_ frq_before scores) -. (score_move_self_ frq_after scores)) /. 2.;;
+	0.
+(*	((score_move_self_ frq_before scores) -. (score_move_self_ frq_after scores)) /. 2.;;*)
 
 (*#trace score_move_self;;*)
 (*let score_move_self = fun frq_before frq_at frq_after scores ->
@@ -288,11 +297,14 @@ let xvector_adjacent_n = fun afterb frq scores n ->
 	let moveself = score_move_self frq_before frq_after scores in
 	let myscores = scores in
 	let beforeb = not afterb in
-	let scores_before_ = list_neg (scoref frq_before myscores) in
+	let scores_before_ = list_neg (scoref (List.append frq_before (List.rev frq_after)) myscores) in
 	let scores_before = add_to_first afterb  moveself scores_before_ in
-	let scores_after_ = scoref frq_after  myscores in  
+	let scores_after_ = scoref (List.append frq_after (List.rev frq_before))  myscores in  
 	let scores_after = add_to_first beforeb moveself scores_after_ in  
-	let score_at_z = sum_listf (list_tl_n scores (sum_list frq_after)) in
+	let score_at_z = (
+		sum_listf (list_tl_n scores (sum_list frq_after)) +.
+		sum_listf (list_tl_n scores (sum_list frq_before)) 
+	) /. 2. in
 	let r = List.concat [ [score_at_z]; List.rev scores_before; scores_after ] in 
 	let _ = pr2 "\n\nAfter: %d\n frq: %s\n  before: %s\n  after:%s \n scores: %s\n n: %d\n r:%s \n"
 		after
@@ -329,14 +341,29 @@ let xvector_at_n= fun move_adj frq scores n ->
 	println_sfl "\nmyscores" myscores;
 	xvector__n n frq frq_before frq_at frq_after myscores scores;;*)
 
+(*
+In linear voting order incrementing positions before n move them closer decreasing the score and incrementing positions after increase the score.
+
+TODO-r circular voting order should be the same but we need to concat frq_before and frq_after.
+
+Inputs
+ frq_before: freqencies before current position (in reverse order, so first element is closest to current position. 
+ frq_after: Freqencies after current position, if forward order so first element is closest to current position.
+ myscores has already been smeared so it should be as if there is only one candidate at the current position 
+*)
 let xvector__n frq_before frq_after myscores =
-	let myscores_before = List.rev (list_neg (scoref frq_before myscores)) in
-	let myscores_after = (scoref frq_after myscores) in  
-	let score_at_z = sum_listf (list_tl_n myscores (sum_list frq_after)) in
+	let myscores_before = List.rev (list_neg (scoref (List.append frq_before (List.rev frq_after)) myscores)) in
+	let myscores_after = (scoref (List.append frq_after (List.rev frq_before)) myscores) in  
+	let score_at_z = (
+		sum_listf (list_tl_n myscores (sum_list frq_after)) +.
+		sum_listf (list_tl_n myscores (sum_list frq_before)) 
+		) /. 2.  in (* Score at zero *)
 	(*let score_at_z = if frq_after = [] then sum_listf myscores else 0. in*)
 	(*list_div frq_at (List.concat [ [score_at_z]; scores_before; [(score_move_self frq_before frq_at frq_after scores n)]; scores_after ]);;*)
-	List.concat [ [score_at_z];  myscores_before; [(score_move_self frq_before frq_after myscores)]; myscores_after ];;
+	(*List.concat [ [score_at_z];  myscores_before; [(score_move_self frq_before frq_after myscores)]; myscores_after ];;*)
+	List.concat [ [score_at_z];  myscores_before; [0.]; myscores_after ];;
 
+(* Vector of scores if we move to position n *)
 let xvector_at_n move_adj frq scores n = 
 	let (frq_before, x, frq_after) =  split_listt frq n in
         (* If the candidate moves to pos n, there will be one more candidate *)
@@ -360,7 +387,7 @@ let decrement_nth = fun l n ->
 
 (* All of these must be non-positive, or candidates starting at position n can boost their vote by moving *)
 let xvector_diffs = fun oldfrq scores ->
-	let move_f = [|xvector_at_n 1; xvector_adjacent_n false; xvector_adjacent_n true|] in
+	let move_f = [|xvector_at_n 1; xvector_adjacent_n false|] in
 	let l = ref [] in
 	let _ = pr1 "\n\n\t1\tc1\tc2\t...\n" in
 	let m = (List.length oldfrq)-1 in
@@ -370,7 +397,7 @@ let xvector_diffs = fun oldfrq scores ->
 			let orig_xvect = xvector_at_n 1 frq scores i in 
 			for j = 0 to m
 			do
-				for k = 0 to 2
+				for k = 0 to 1
 				do 
 					(*println_sil "mijk" [m;i;j;k];*)
 					let new_xvect=move_f.(k) frq scores j in
@@ -623,13 +650,7 @@ let get_lp fr_ sc_ myprim =
              (Array.of_list vectors)
              (Array.of_list ranges) 
              xbounds in
-	
-
-
-
-
-
-set_message_level lp (if !verbosity >= 2 then 2 else 0);
+	set_message_level lp (if !verbosity >= 2 then 2 else 0);
 	set_message_level lp 0;
     	(*scale_problem lp;
 	
@@ -901,13 +922,13 @@ let rec fixstr_ s i j = if j >= String.length s then String.sub s 0 i else let (
 let fixstr = fun s -> fixstr_ (clear_equals s) 0 0
 
 let _ =
- 	Printf.printf "Content-type: text/plain\n\n";
+ 	Printf.printf "Content-type: text/plain TESSSST\n\n";
 	let qs_ = try 
 		(Sys.getenv "QUERY_STRING")
 		with Not_found -> (
 			try ( let opt = Sys.argv.(1) in
 				if ( opt = "ab" ) 
-				then  enumerate_ab 9999 ; "1 0"
+				then  enumerate_ab 9999 ; opt 
 			) with _ ->
 			self_diag (); "1 0") in
 	flush stdout;
