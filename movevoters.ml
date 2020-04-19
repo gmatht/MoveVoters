@@ -39,9 +39,6 @@ let sum_list   = List.fold_left  (+)  0 ;;
 let sum_listf  = List.fold_left  (+.) 0.;; 
 let sum_arrayf = Array.fold_left (+.) 0.;; 
 
-let epsilon = 0.01
-let is_zerof f = (f < epsilon) && (f > -.epsilon)
-
 let string_of_floatlist = fun fl -> String.concat "\t" (List.map string_of_float fl);; 
 let string_of_intlist = fun l -> String.concat "\t" (List.map string_of_int l);; 
 let string_of_floatarray = fun fl -> (string_of_floatlist (Array.to_list fl));; 
@@ -61,13 +58,6 @@ let split_listt l n = match (split_list l (n)) with
                 (a,x::b) -> (a,x,b)
                 | _ -> assert false ;;
 
-let decrement_nth = fun l n -> 
-	let a = Array.of_list l in
-	let _ = a.(n) <- a.(n) - 1 in
-	Array.to_list a;;
-
-
-		
 
 (* Let an Xvector be a vector such that if we take the product of the xvector with a vector of political positions, we the total score awarded to a candidate *)
 
@@ -100,49 +90,9 @@ let rec scoref frq scores = match frq with
 					[] -> assert false
 					| oh::ot -> ((oh+.(score /. 2.)))::ot);;
 
-
-(* The value a candidate loses from candidates to the right, 
- * by moving towards the right by one unit.
- *)
-let score_gradient_ro = fun scores n -> let (a, b) = split_list scores n in
-	let (sum_a, sum_b) = (sum_listf a, sum_listf b) in
-	( (sum_a /. 2.) +. sum_b ) 
-
-(* The total value a candidate *gains* my moving one unit to the right
- * Including votes to the right and left *)
-
-let score_gradient = fun scores frq_before frq_after -> 
-	let (a, b) = (sum_list frq_before, sum_list frq_after) in 
-	(score_gradient_ro scores a) -. (score_gradient_ro scores b);;
-
 (* When n candidates shares a postition the effective scores match (smear_scores scores n) *)
-
-(* OUT_OF_DATE smear_scores_ takes as input a scoring rule and outputs a scoring rule that gives
-   the total score given to a group of n candidates with the same political position 
-
-   smear_scores is as above, but gives the score given to one of the candidates *)
-
-let rec smear_scores_ = fun scores n ->
-     	if n <= 1 then (
-		scores
-	) else (
-		match scores with
-		a::b::sc -> (smear_scores_ ((a+.b)::sc) (n-1))
-		| _ -> (assert false)
-	)
-
-let smear_scores scores n =
-	let div = (float n) in
-	List.map (fun x -> x/.div) (List.rev (smear_scores_ (List.rev scores) n))
-
-let smear_scores scores n =
-	let a = Array.of_list scores in
-	let nf = (float_of_int n) in
-	for j = 1 to (n-1) do  
-		let i = j - 1 in
-		a.(i) <- (a.(i)/.nf)*.(float_of_int j)
-	done;	
-	Array.to_list a;;
+(* smear_scores takes as input a scoring rule and outputs a scoring rule that gives
+   the share of the score given to a candidate in a group of n candidates with the same political position  *)
 	
 let smear_scores scores n =
    let siz = List.length scores in
@@ -287,6 +237,7 @@ let rec fold_gcm n = if n = 1 then 1 else gcm n (fold_gcm (n-1))
 let scale_factor sc = 2 * fold_gcm (1+List.length sc) 
 let scale_factor_frq l = 2 * (List.fold_left ( fun a b -> if b=1 then a else (gcm (b+1) (gcm (b-1) (gcm b a)))) 1 l ) 
 
+(* multiply scores by smallest common multiple of frequencies * 2, presumably to try to keep something integer *)
 let normalise_scores fr sc = let sf = scale_factor_frq fr in pr1 "Scale Factor: %d\n" sf ; (fr, List.map (fun e -> float_of_int (e*sf)) sc)
 
 let dump_bound name m l =
@@ -322,9 +273,6 @@ let string_words s_ = let s = " " ^ s_ in
 		)
 	done ;
 	words;;
-string_words " xxxx  YY x z";;
-string_words "z";;
-string_words "1 z";;
 
 (* Do actual problem *)
 (*
@@ -350,7 +298,7 @@ let round x = let r = floor ( x +. 0.5 ) in
 	assert (abs_float (r -. x) < 0.0001);
 	r;;  
 
-let slack = ref 0.0 (* Increase this to allow almost solutions? *)
+let slack = ref 0.0 (* Increase this to allow almost correct solutions? *)
 
 let get_lp fr_ sc_ myprim =
 	let epsilon=0.000 in
@@ -391,9 +339,7 @@ let get_lp fr_ sc_ myprim =
              (Array.of_list vectors)
              (Array.of_list ranges) 
              xbounds in
-
-
-set_message_level lp (if !verbosity >= 2 then 2 else 0);
+	set_message_level lp (if !verbosity >= 2 then 2 else 0);
 	set_message_level lp 0;
     	(*scale_problem lp;
 	
@@ -490,7 +436,6 @@ let contains s1 s2 =
         try ignore (Str.search_forward re s1 0); true
         with Not_found -> false
 
-let has_ne sc = let r = try_all_freq sc in Printf.printf "\n--------\n%s\n^^^^^^^^^\n" r ; contains r "Exist"
 let has_ne sc = let r = try_all_freq sc in contains r "Exist"
 let has_neT sc = has_ne (transform_scores sc)
 	
@@ -645,6 +590,7 @@ let enumerate_ab inf =
 
 ;;
 
+(*Get and clear a character from a string, return true if it existed before clearing*)
 let get_opt c s =
 	try s.[String.index s c] <- ' '; true
 	with Not_found -> false
