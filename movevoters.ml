@@ -107,11 +107,6 @@ let smear_scores scores n =
    done in 
    Array.to_list newscores;; 
 
-let rec list_tl_n l n =
-	if n = 0 
-		then l
-		else (list_tl_n (List.tl l) (n-1))
-
 let score_move_self_ frq_before scores =
 	let sum_before = sum_list frq_before in
 	sum_listf (list_tl_n scores sum_before)
@@ -121,6 +116,7 @@ let score_move_self_ frq_before scores =
 let score_move_self = fun frq_before frq_after scores ->
 	((score_move_self_ frq_before scores) -. (score_move_self_ frq_after scores)) /. 2.;;
 
+(* if b then add f to first element of l *)
 let add_to_first = fun b f l ->
 	if b then
 	match l with 
