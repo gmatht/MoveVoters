@@ -28,6 +28,7 @@ let vector_subtractf = List.map2 ( -. ) ;;
 
 let list_neg = List.map (fun x -> -. x);;
 let list_div = (fun y -> List.map (fun x -> x /. y));;
+let list_sumf = List.map2(fun x y -> x+.y);;
 
 let verbosity = ref 0;;
 
@@ -114,7 +115,8 @@ let score_move_self_ frq_before scores =
 (* slope of score change if all candidates that share a position move to the right
  * Note that if this is an equilibrium, and frq(n)=1, then this slope must equal 0 *)
 let score_move_self = fun frq_before frq_after scores ->
-	((score_move_self_ frq_before scores) -. (score_move_self_ frq_after scores)) /. 2.;;
+	0.
+(*	((score_move_self_ frq_before scores) -. (score_move_self_ frq_after scores)) /. 2.;;*)
 
 (* if b then add f to first element of l *)
 let add_to_first = fun b f l ->
@@ -145,12 +147,15 @@ let xvector_adjacent_n = fun afterb frq scores n ->
 	let moveself = score_move_self frq_before frq_after scores in
 	let myscores = scores in
 	let beforeb = not afterb in
-	let scores_before_ = list_neg (scoref frq_before myscores) in
+	let scores_before_ = list_neg (scoref (List.append frq_before (List.rev frq_after)) myscores) in
 	let scores_before = add_to_first afterb  moveself scores_before_ in
-	let scores_after_ = scoref frq_after  myscores in  
+	let scores_after_ = scoref (List.append frq_after (List.rev frq_before))  myscores in  
 	let scores_after = add_to_first beforeb moveself scores_after_ in  
-	let score_at_z = sum_listf (list_tl_n scores (sum_list frq_after)) in
-	let r = List.concat [ [score_at_z]; List.rev scores_before; scores_after ] in 
+	let score_at_z = (
+		sum_listf (list_tl_n scores (sum_list frq_after)) +.
+		sum_listf (list_tl_n scores (sum_list frq_before)) 
+	) /. 2. in
+	let r = List.concat [ [score_at_z]; list_sumf (List.rev scores_before) scores_after ] in 
 	let _ = pr2 "\n\nAfter: %d\n frq: %s\n  before: %s\n  after:%s \n scores: %s\n n: %d\n r:%s \n"
 		after
 		(string_of_intlist frq) (string_of_intlist frq_before) (string_of_intlist frq_after)
@@ -162,10 +167,17 @@ let xvector_adjacent_n = fun afterb frq scores n ->
 	r;;
 
 let xvector__n frq_before frq_after myscores =
-	let myscores_before = List.rev (list_neg (scoref frq_before myscores)) in
-	let myscores_after = (scoref frq_after myscores) in  
-	let score_at_z = sum_listf (list_tl_n myscores (sum_list frq_after)) in
-	List.concat [ [score_at_z];  myscores_before; [(score_move_self frq_before frq_after myscores)]; myscores_after ];;
+	let myscores_before = List.rev (list_neg (scoref (List.append frq_before (List.rev frq_after)) myscores)) in
+	let myscores_after = (scoref (List.append frq_after (List.rev frq_before)) myscores) in  
+	let score_at_z = (
+		sum_listf (list_tl_n myscores (sum_list frq_after)) +.
+		sum_listf (list_tl_n myscores (sum_list frq_before)) 
+		) /. 2.  in (* Score at zero *)
+	(*let score_at_z = if frq_after = [] then sum_listf myscores else 0. in*)
+	(*list_div frq_at (List.concat [ [score_at_z]; scores_before; [(score_move_self frq_before frq_at frq_after scores n)]; scores_after ]);;*)
+	(*List.concat [ [score_at_z];  myscores_before; [(score_move_self frq_before frq_after myscores)]; myscores_after ];;*)
+        let (pos_before, pos_after) = split_list (list_sumf myscores_before myscores_after) (List.length frq_after) in
+	List.concat [ [score_at_z];  pos_before; [0.]; pos_after ];;
 
 let xvector_at_n move_adj frq scores n = 
 	let (frq_before, x, frq_after) =  split_listt frq n in
@@ -230,8 +242,8 @@ let rec gcd a b =
 let gcm a b = a * b / (gcd a b)
 
 let rec fold_gcm n = if n = 1 then 1 else gcm n (fold_gcm (n-1)) 
-let scale_factor sc = 2 * fold_gcm (1+List.length sc) 
-let scale_factor_frq l = 2 * (List.fold_left ( fun a b -> if b=1 then a else (gcm (b+1) (gcm (b-1) (gcm b a)))) 1 l ) 
+(*let scale_factor sc = 2 * fold_gcm (1+List.length sc) *)
+let scale_factor_frq l = 4 * (List.fold_left ( fun a b -> if b=1 then a else (gcm (b+1) (gcm (b-1) (gcm b a)))) 1 l ) 
 
 (* multiply scores by smallest common multiple of frequencies * 2, presumably to try to keep something integer *)
 let normalise_scores fr sc = let sf = scale_factor_frq fr in pr1 "Scale Factor: %d\n" sf ; (fr, List.map (fun e -> float_of_int (e*sf)) sc)
@@ -291,7 +303,7 @@ open Str
 
 (* the following is technially incorrect, but oh well. *)
 let round x = let r = floor ( x +. 0.5 ) in
-	assert (abs_float (r -. x) < 0.0001);
+	assert (abs_float (r -. x) < 0.00001); 
 	r;;  
 
 let slack = ref 0.0 (* Increase this to allow almost correct solutions? *)
@@ -312,6 +324,8 @@ let get_lp fr_ sc_ myprim =
 	let bound_nogain = List.map (fun (name,x)-> (name,0,Array.of_list x)) (xvector_diffs fr sc) in
 	let bound_0 = (Array.make siz 0.0) in
 	    bound_0.(1) <- -1.0; (* Ensure the first position is atleast 0, and hence all other positions are aleast 0 *)
+	let bound_00 = (Array.make siz 0.0) in
+	    bound_00.(1) <- 1.0; (* Ensure the first position is at most 0, and exactly 0 *)
 	let bound_1 = (Array.make siz 0.0) in
 	    bound_1.(siz-1) <-  1.0 ; (* Ensure that last position is at most 1, and thus all are at most 1 *)
 	let bounds_noslack0 = List.concat [bound_nogain; [(">=0",0,bound_0)]; [("<=1", 1,bound_1)]] in
@@ -606,12 +620,14 @@ let _ =
 		with Not_found -> (
 			try ( let opt = Sys.argv.(1) in
 				if ( opt = "ab" ) 
-				then  enumerate_ab 9999 ; "1 0"
+				then (enumerate_ab 9999 ; "1 0")
+				else opt
 			) with _ ->
 			self_diag (); "1 0") in
 	flush stdout;
 	let qs = fixstr qs_ in
 	pr2 "qs: %s\n" qs;
+	Printf.printf "qs: %s\n" qs;
 	let cumulative_scores = (get_opt 'C' qs || get_opt 'c' qs) in
 	if (get_opt 'S' qs) then slack := 1.0; 
 	verbosity := if get_opt 'V' qs then 2 else 
