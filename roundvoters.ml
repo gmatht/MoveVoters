@@ -1,11 +1,4 @@
 (*
-Version of movevoters for circular voting positions case
-ACTUALLY CHANGE FOR ROUND CASE
-
-core of the program is get_lp that gets the Linear Program needed to solve the problem.
-
-
-
 TODO: Round floats for better precision, as they should be floats after scaling
 ./MoveVoters/ocaml-glpk-0.1.6/examples/example.ml
 
@@ -26,10 +19,10 @@ Should not exist an NE to
 
 (* PRELIMINARIES *)
 
-(* Adds two vectors *)
 
 exception Slippery_Slope
 
+(* Adds two vectors *)
 let vector_sum = List.map2 ( + ) ;;
 let vector_subtractf = List.map2 ( -. ) ;;
 
@@ -40,15 +33,11 @@ let verbosity = ref 0;;
 
 let pr1 x = if !verbosity >= 1 then Printf.printf x else Printf.ifprintf stdout x
 let pr2 x = if !verbosity >= 2 then Printf.printf x else Printf.ifprintf stdout x
-(*let pr2 = pr_ 2*)
 
 (* Returns the sum of a list (int & float respectively *)
 let sum_list   = List.fold_left  (+)  0 ;; 
 let sum_listf  = List.fold_left  (+.) 0.;; 
 let sum_arrayf = Array.fold_left (+.) 0.;; 
-
-let epsilon = 0.01
-let is_zerof f = (f < epsilon) && (f > -.epsilon)
 
 let string_of_floatlist = fun fl -> String.concat "\t" (List.map string_of_float fl);; 
 let string_of_intlist = fun l -> String.concat "\t" (List.map string_of_int l);; 
@@ -69,19 +58,9 @@ let split_listt l n = match (split_list l (n)) with
                 (a,x::b) -> (a,x,b)
                 | _ -> assert false ;;
 
-let decrement_nth = fun l n -> 
-	let a = Array.of_list l in
-	let _ = a.(n) <- a.(n) - 1 in
-	Array.to_list a;;
-
-
-		
 
 (* Let an Xvector be a vector such that if we take the product of the xvector with a vector of political positions, we the total score awarded to a candidate *)
 
-
-(*let rec scoref frq scores = match frq with [] -> [] | head::tail -> if head = 0 then (scoref tail scores) else (List.append [head] (scoref tail (List.tl scores)));;
-*)
 
 (* This returns an Xvector v for scores, 
  *   i.e. moving the ith candidate forward e units will increase the score of
@@ -111,97 +90,10 @@ let rec scoref frq scores = match frq with
 					[] -> assert false
 					| oh::ot -> ((oh+.(score /. 2.)))::ot);;
 
-
-(* Returns an Xvector of the score a candidate at zero would get
-   I THINK THIS IS BUGGY *)
-
-(*
-let score_at_zero = fun frq scores ->
-	let sum_frq = sum_list frq in
-	let (a,b) = split_list scores sum_frq in
-	sum_listf b;; (* STUB *)
-*)
-(* The value a candidate loses from candidates to the right, 
- * by moving towards the right by one unit.
- *)
-let score_gradient_ro = fun scores n -> let (a, b) = split_list scores n in
-	let (sum_a, sum_b) = (sum_listf a, sum_listf b) in
-	( (sum_a /. 2.) +. sum_b ) 
-
-(* The total value a candidate *gains* my moving one unit to the right
- * Including votes to the right and left *)
-
-let score_gradient = fun scores frq_before frq_after -> 
-	let (a, b) = (sum_list frq_before, sum_list frq_after) in 
-	(score_gradient_ro scores a) -. (score_gradient_ro scores b);;
-
-(*let rec join_list_ a b = if n <= 0 then ([],l) else 
-	match a with 
-		x::l -> join_list x::l 
-		| _ -> assert false ;;
-*)
-(*let scorerev = fun frq scores (List.rev 
-*)
-(*
-let scoreBA = fun frq_before frq_after scores  -> 
-	let scores_before = list_neg (scoref frq_before scores) in
-	let scores_after = (scoref frq_after scores) in 
-(*	(list_neg ( score_at_zero frq_after scores ), score_at_zero frq_after scores, score_gradient  );; *)
-	(scores_before, scores_after, score_at_zero frq_after scores, score_gradient  );;
-(* Should rewrite the following in terms of scoreBA or delete *)
-let scoreA = fun frq scores n  -> 
-	let (frq_before, frq_after) =  split_list frq n in
-	let scores_before = List.rev (list_neg (scoref frq_before scores)) in
-	let scores_after = (scoref frq_after scores) in 
-(*	(list_neg ( score_at_zero frq_after scores ), score_at_zero frq_after scores, score_gradient  );; *)
-	(scores_before, scores_after, score_at_zero frq_after scores, score_gradient  );;
-*)
-
-   (*(Array.to_list newscores);;*)
 (* When n candidates shares a postition the effective scores match (smear_scores scores n) *)
-
-
-(* OUT_OF_DATE smear_scores_ takes as input a scoring rule and outputs a scoring rule that gives
-   the total score given to a group of n candidates with the same political position 
-
-   smear_scores is as above, but gives the score given to one of the candidates *)
-
-let rec smear_scores_ = fun scores n ->
-     	if n <= 1 then (
-		scores
-	) else (
-		match scores with
-		a::b::sc -> (smear_scores_ ((a+.b)::sc) (n-1))
-		| _ -> (assert false)
-	)
-
-let smear_scores scores n =
-	let div = (float n) in
-	List.map (fun x -> x/.div) (List.rev (smear_scores_ (List.rev scores) n))
-
-let smear_scores scores n =
-	let a = Array.of_list scores in
-	let nf = (float_of_int n) in
-	for j = 1 to (n-1) do  
-		let i = j - 1 in
-		a.(i) <- (a.(i)/.nf)*.(float_of_int j)
-	done;	
-	Array.to_list a;;
+(* smear_scores takes as input a scoring rule and outputs a scoring rule that gives
+   the share of the score given to a candidate in a group of n candidates with the same political position  *)
 	
-(*	 
-let smear_scores scores n =
-   let ascores= (Array.of_list scores) in
-   let newscores = Array.make ( (Array.length ascores) - n + 1 ) 0.0 in
-   let _ = for i = 0 to (Array.length newscores) - 1 
-   do
-	for j = 0 to n - 1
-	do newscores.(i) <- newscores.(i) +. ascores.(i+j)
-	done ;
-	newscores.(i) <- newscores.(i) /. (float n) 
-   done in 
-   Array.to_list newscores;; 
-   (*(Array.to_list newscores);;*)
-*)
 let smear_scores scores n =
    let siz = List.length scores in
    let ascores= Array.append (Array.of_list scores) (Array.make n 0.0) in
@@ -214,60 +106,17 @@ let smear_scores scores n =
 	newscores.(i) <- newscores.(i) /. (float n) 
    done in 
    Array.to_list newscores;; 
-   (*(Array.to_list newscores);;*)
-let rec list_tl_n l n =
-	if n = 0 
-		then l
-		else (list_tl_n (List.tl l) (n-1))
 
 let score_move_self_ frq_before scores =
 	let sum_before = sum_list frq_before in
 	sum_listf (list_tl_n scores sum_before)
 
 (* slope of score change if all candidates that share a position move to the right
- * Note that if this is an equilibrium, and frq(n)=1, then this slope must equal 0
-   IN ROUND CASE THIS ALWAYS EQUALS 0 *)
+ * Note that if this is an equilibrium, and frq(n)=1, then this slope must equal 0 *)
 let score_move_self = fun frq_before frq_after scores ->
-	0.
-(*	((score_move_self_ frq_before scores) -. (score_move_self_ frq_after scores)) /. 2.;;*)
+	((score_move_self_ frq_before scores) -. (score_move_self_ frq_after scores)) /. 2.;;
 
-(*#trace score_move_self;;*)
-(*let score_move_self = fun frq_before frq_at frq_after scores ->
-(*        let (frq_before, old_frq_at, frq_after) = split_listt frq n in
-	let old_frq_at = move_adj + old_frq_at in
-dd	let scores = list_tl_n oscores (frq_at) in 
-*)
-	(*Printf.printf "\nscore_move_self: %s \n frq %d\n  before: %s\n  after: %s\n" 
-		(string_of_floatlist scores)
-		frq_at (string_of_intlist frq_before) (string_of_intlist frq_after)*)
-	let (sum_before, sum_after) = (sum_list frq_before, sum_list frq_after) in
-	
-	let diff_sum = sum_after - sum_before in
-	let (abs_sum, sign_sum) = if diff_sum > 0 then (diff_sum, 1.0) else (-diff_sum, -1.0) in
-        let (diff_scores, _) = split_list (List.rev scores) (abs_sum+frq_at) in 
-(*
-        let (diff_scores, _) = split_list (List.rev scores) abs_sum in 
-	let _ = (println_sil "n" [n],println_sil "frq_before" frq_before, println_sil "frq_after" frq_after, println_sil "abs_sum" [abs_sum], println_sfl "sign_sum" [sign_sum], println_sfl "diff_scores" diff_scores, println_sfl "-----" [])  in *)
-(*        let (scores_that_cancel, diff_scores) = split_list scores diff_sum in 
-	( (sum_listf diff_scores) *. sign_sum ) *. 100. +. 10000.;;
-
-*)
-	let r = ( (sum_listf diff_scores) *. sign_sum ) /. (float frq_at) /. 2.0 in 
-	(Printf.printf "\nscore_move_self: %f for %s \n frq %d\n  before: %s\n  after: %s\n diff_sum: %d\n " 
-		r (string_of_floatlist scores)
-		frq_at (string_of_intlist frq_before) (string_of_intlist frq_after)
-		diff_sum);
-	r
-*)
-
-(*let xvector_x__ = let scores_before = List.rev (list_neg (scoref frq_before scores)) in
-        let scores_after = (scoref frq_after scores) in
-        let score_at_z = if frq_after = [] then sum_listf scores /. frq_at else 0 in
-        List.concat [ score_at_z, scores_before, scores_after ];;*)
-
-(*let slopes_of_n = fun frq scores n ->*)
-
-
+(* if b then add f to first element of l *)
 let add_to_first = fun b f l ->
 	if b then
 	match l with 
@@ -290,21 +139,17 @@ let assert_no_slope frq scores =
 	f [] frq
 					(*((Printf.printf "Candidate %d would slide to %s\n" *)
 	
-(*let slopes_of_n = fun frq scores n -> *) 
 let xvector_adjacent_n = fun afterb frq scores n -> 
 	let after=if afterb then 1 else 0 in 
 	let (frq_before, frq_after) =  split_list frq (n + after) in
 	let moveself = score_move_self frq_before frq_after scores in
 	let myscores = scores in
 	let beforeb = not afterb in
-	let scores_before_ = list_neg (scoref (List.append frq_before (List.rev frq_after)) myscores) in
+	let scores_before_ = list_neg (scoref frq_before myscores) in
 	let scores_before = add_to_first afterb  moveself scores_before_ in
-	let scores_after_ = scoref (List.append frq_after (List.rev frq_before))  myscores in  
+	let scores_after_ = scoref frq_after  myscores in  
 	let scores_after = add_to_first beforeb moveself scores_after_ in  
-	let score_at_z = (
-		sum_listf (list_tl_n scores (sum_list frq_after)) +.
-		sum_listf (list_tl_n scores (sum_list frq_before)) 
-	) /. 2. in
+	let score_at_z = sum_listf (list_tl_n scores (sum_list frq_after)) in
 	let r = List.concat [ [score_at_z]; List.rev scores_before; scores_after ] in 
 	let _ = pr2 "\n\nAfter: %d\n frq: %s\n  before: %s\n  after:%s \n scores: %s\n n: %d\n r:%s \n"
 		after
@@ -315,55 +160,13 @@ let xvector_adjacent_n = fun afterb frq scores n ->
 		(string_of_floatlist scores_after)
 		moveself in
 	r;;
-(*
-	(xvector__n n frq frq_before frq_at frq_after scores scores);;
-	let scores_before = List.rev (list_neg (scoref frq_before scores)) in
-	let scores_after = (scoref frq_after scores) in  
-	let score_at_z = if frq_after = [] then sum_listf scores /. (float frq_at) else 0. in
-	List.concat [ score_at_z, scores_before, scores_after ];;
-*)
 
-(*let xvector__n = fun n frq frq_before frq_at frq_after myscores scores ->
-	let scores_before = List.rev (list_neg (scoref frq_before myscores)) in
-	let scores_after = (scoref frq_after myscores) in  
-	let score_at_z = if frq_after = [] then sum_listf scores /. (float frq_at) else 0. in
-	(*list_div frq_at (List.concat [ [score_at_z]; scores_before; [(score_move_self frq_before frq_at frq_after scores n)]; scores_after ]);;*)
-	List.concat [ [score_at_z]; scores_before; [(score_move_self frq_before frq_at frq_after scores)]; scores_after ];;
-
-
-let xvector_at_n= fun move_adj frq scores n -> 
-	let (frq_before, x, frq_after) =  split_listt frq n in
-        (* If the candidate moves to pos n, there will be one more candidate *)
-	let frq_at = x + move_adj in 
-	let myscores = smear_scores scores frq_at in
-	print_int n;
-	print_int frq_at;
-	println_sfl "\nmyscores" myscores;
-	xvector__n n frq frq_before frq_at frq_after myscores scores;;*)
-
-(*
-In linear voting order incrementing positions before n move them closer decreasing the score and incrementing positions after increase the score.
-
-TODO-r circular voting order should be the same but we need to concat frq_before and frq_after.
-
-Inputs
- frq_before: freqencies before current position (in reverse order, so first element is closest to current position. 
- frq_after: Freqencies after current position, if forward order so first element is closest to current position.
- myscores has already been smeared so it should be as if there is only one candidate at the current position 
-*)
 let xvector__n frq_before frq_after myscores =
-	let myscores_before = List.rev (list_neg (scoref (List.append frq_before (List.rev frq_after)) myscores)) in
-	let myscores_after = (scoref (List.append frq_after (List.rev frq_before)) myscores) in  
-	let score_at_z = (
-		sum_listf (list_tl_n myscores (sum_list frq_after)) +.
-		sum_listf (list_tl_n myscores (sum_list frq_before)) 
-		) /. 2.  in (* Score at zero *)
-	(*let score_at_z = if frq_after = [] then sum_listf myscores else 0. in*)
-	(*list_div frq_at (List.concat [ [score_at_z]; scores_before; [(score_move_self frq_before frq_at frq_after scores n)]; scores_after ]);;*)
-	(*List.concat [ [score_at_z];  myscores_before; [(score_move_self frq_before frq_after myscores)]; myscores_after ];;*)
-	List.concat [ [score_at_z];  myscores_before; [0.]; myscores_after ];;
+	let myscores_before = List.rev (list_neg (scoref frq_before myscores)) in
+	let myscores_after = (scoref frq_after myscores) in  
+	let score_at_z = sum_listf (list_tl_n myscores (sum_list frq_after)) in
+	List.concat [ [score_at_z];  myscores_before; [(score_move_self frq_before frq_after myscores)]; myscores_after ];;
 
-(* Vector of scores if we move to position n *)
 let xvector_at_n move_adj frq scores n = 
 	let (frq_before, x, frq_after) =  split_listt frq n in
         (* If the candidate moves to pos n, there will be one more candidate *)
@@ -377,17 +180,15 @@ let xvector_at_n move_adj frq scores n =
 		println_sfl "\nmyscores" myscores
 	);
 	xvector__n frq_before frq_after myscores
-(*List.concat [ [score_at_z];  myscores_before; [(score_move_self frq_before frq_at frq_after scores)]; myscores_after ];;*)
 
 let decrement_nth = fun l n -> 
 	let a = Array.of_list l in
 	let _ = a.(n) <- a.(n) - 1 in
 	Array.to_list a;;
 
-
 (* All of these must be non-positive, or candidates starting at position n can boost their vote by moving *)
 let xvector_diffs = fun oldfrq scores ->
-	let move_f = [|xvector_at_n 1; xvector_adjacent_n false|] in
+	let move_f = [|xvector_at_n 1; xvector_adjacent_n false; xvector_adjacent_n true|] in
 	let l = ref [] in
 	let _ = pr1 "\n\n\t1\tc1\tc2\t...\n" in
 	let m = (List.length oldfrq)-1 in
@@ -397,7 +198,7 @@ let xvector_diffs = fun oldfrq scores ->
 			let orig_xvect = xvector_at_n 1 frq scores i in 
 			for j = 0 to m
 			do
-				for k = 0 to 1
+				for k = 0 to 2
 				do 
 					(*println_sil "mijk" [m;i;j;k];*)
 					let new_xvect=move_f.(k) frq scores j in
@@ -418,16 +219,6 @@ let xvector_diffs = fun oldfrq scores ->
 		done in
 	l.contents ;;
 
-(*	
-	let diff = vector_subtractf orig_xvect new_xvect in	
-*)	
-
-
-
-
-	
-(*let ( scores_before, scores_after, score_at_z, score_grad) = scoreA frq scores n in*)
-	
 (* Greatest common divisor (inefficent) *)
 let rec gcd a b =
 	if a > b 
@@ -438,50 +229,12 @@ let rec gcd a b =
 
 let gcm a b = a * b / (gcd a b)
 
-(*let scale_factor l = 2 * (List.fold_left ( fun a b -> if b=1 then a else (gcm (b+1) (gcm (b-1) (gcm b a)))) 1 l ) *)
-
 let rec fold_gcm n = if n = 1 then 1 else gcm n (fold_gcm (n-1)) 
 let scale_factor sc = 2 * fold_gcm (1+List.length sc) 
 let scale_factor_frq l = 2 * (List.fold_left ( fun a b -> if b=1 then a else (gcm (b+1) (gcm (b-1) (gcm b a)))) 1 l ) 
 
+(* multiply scores by smallest common multiple of frequencies * 2, presumably to try to keep something integer *)
 let normalise_scores fr sc = let sf = scale_factor_frq fr in pr1 "Scale Factor: %d\n" sf ; (fr, List.map (fun e -> float_of_int (e*sf)) sc)
-
-
-
-
-	
-	
-
-(* let (fr,sc) = ([1;1;2], [0.2;0.2;0.2;0.3]);; *)
-
-
-(* let (fr,sc) = normalise_scores [2;1;1] [1;0;0;0];; *)
-(* GAIN from move to right 1   0.5  0.25
-   GAIN from move to left  0.5 0.5  0.5
-   NET GAIN  move to right 0.5 0   -0.25
-
-Xvector 0: ?  0.5  -0.5  0
-Xvector 1: ? -0.5   0    0.5
-Xvector 2: ?  0    -0.25 -0.25
-*)
-
-(* for i = 0 to 2 do
-	(*ignore (smear_scores sc i);*)
-	(xvector_at_n 0 fr sc i);
-done;
-
-print_string "Xvector 0: ?  0.5   0.5  0\n";
-print_string "Xvector 1: ? -0.5   0    0.5\n";
-print_string "Xvector 2: ?  0    -0.25 -0.25\n\n";
-
-for i = 0 to 2 do
-	Printf.printf "Xvect%d " i;
-	println_sfl "" (xvector_at_n 0 fr sc i);
-done;;
-*)
-
-(* Print out data given in first email to Slinko *) 
-(*List.iter (println_sfl "c") (xvector_diffs fr sc);;*)
 
 let dump_bound name m l =
 	Printf.printf "%s:\t%s <= %d\n" name (string_of_floatlist (Array.to_list l)) m;;
@@ -503,18 +256,6 @@ let rec iter_freq_ total remaining l f =
 
 let iter_freq n f = iter_freq_ n n [] f 
 
-
-
-(*
-Enumerate possible frequencies
-let _ = print_string "-------------\n"
-let _ = iter_freq 6 (fun l -> println_sil "fr" l)
-let _ = print_string "-------------\n"
-*)
-
-(*let rec split_string s = let t = String.trim s in
-	let i = String.rindex
-*)
 let string_words s_ = let s = " " ^ s_ in
 	let words=ref [] in
 	let word_len=ref 0 in
@@ -528,61 +269,6 @@ let string_words s_ = let s = " " ^ s_ in
 		)
 	done ;
 	words;;
-string_words " xxxx  YY x z";;
-string_words "z";;
-string_words "1 z";;
-
-
-
-
-(*let bounds = List.map (fun x -> ((-.infinity,0),x)) bounds *)
-
-(*print_string "sdfsfds\n";;
-*)
-
-(*scoreA [1;1;2] [0.2;0.2;0.2;0.3] 1;;
-(*print_float (score_move_self [1;1;2] [0.2;0.2;0.2;0.3] 0);;*)
-(*print_string "  ";;
-print_float (score_move_self [1;1;2] [0.2;0.2;0.2;0.3] 1);;
-print_string "  ";;
-print_float (score_move_self [1;1;2] [0.2;0.2;0.2;0.3] 2);;
-print_string "  ";;
-print_float (score_move_self [1;1;2] [0.2;0.2;0.2;0.3] 3);;
-print_string "  ";;
-print_string "\n";;
-for i = 0 to 3 
-do println_sfl "xvect" (xvector_at_n 0 [1;1;2] [0.2;0.2;0.2;0.3] i)
-done;;
-*)
-*)
-
-
-(*
-println_sfl "c" (List.hd (xvector_diffs fr sc));;
-List.iter (println_sfl "c") (xvector_diffs fr sc);;
-let (o1,o2,o3)=scoreA [1;1;2] [0.2;0.2;0.2;0.3] 1;;
-print_string (String.concat " " (List.map string_of_float o1));;*)
-
-
-(*let xvector_adjacent_n = fun afterb frq scores n -> 
-  - after and before
-test xvector_adjacent
-at
-non-zero score_z
-in middle
-at end
-borda
-6 1 1 0
-LP finds solution
-
-	assert score_move_self = fun frq_before frq_at frq_after scores ->
-*)
-
-(*let adj_assert a b c d eq =
-	let result = xvector_adjacent_n a b c d in
-*)	
-
-
 
 (* Do actual problem *)
 (*
@@ -608,7 +294,7 @@ let round x = let r = floor ( x +. 0.5 ) in
 	assert (abs_float (r -. x) < 0.0001);
 	r;;  
 
-let slack = ref 0.0 (* Increase this to allow almost solutions? *)
+let slack = ref 0.0 (* Increase this to allow almost correct solutions? *)
 
 let get_lp fr_ sc_ myprim =
 	let epsilon=0.000 in
@@ -623,7 +309,6 @@ let get_lp fr_ sc_ myprim =
 			a.(n) <- -1.0;
 			(Printf.sprintf "p_%d < p_%d" (n-1) n,0,(Array.append [|1.0|] a))::(bound_inorder_ (n-1)) in
 	let bound_inorder = bound_inorder_ ((List.length fr)) in (*Ensure monotonically increasing positions *)
-(*let bound_nogain = list.map (fun x-> ((-.infinity,0),x) (xvector_diffs fr sc));; *)
 	let bound_nogain = List.map (fun (name,x)-> (name,0,Array.of_list x)) (xvector_diffs fr sc) in
 	let bound_0 = (Array.make siz 0.0) in
 	    bound_0.(1) <- -1.0; (* Ensure the first position is atleast 0, and hence all other positions are aleast 0 *)
@@ -677,7 +362,6 @@ let get_report fr sc =
 		let (error,lp) = get_lp fr sc [] in
     		let prim = get_col_primals lp in
       		let var = (string_of_floatlist (List.tl (List.tl (Array.to_list prim)))) in
-      		(*let var = (string_of_floatarray prim) in*)
 		if error then 
 			"Invalid Solution: " ^ var
 		else (
@@ -697,6 +381,7 @@ let get_report fr sc =
 		"No NE: Non Zero Slope"
 	| No_primal_feasible_solution ->
 		"No NE: No LP solution"
+
 (* from: http://rosettacode.org/wiki/Repeat_a_string#OCaml *)
 let string_repeat s n =
   let len = String.length s in
@@ -727,12 +412,6 @@ let try_all_freq sc =
 	out_string
 
 
-	
-(* let _ = try_all_freq [1; 0; 0; 0];; *)
-
-(*
-let _ = print_string (get_report [2; 1; 1] [1; 0; 0;0]) *)
-
 let words = (Str.split (Str.regexp ",?  *"))
 let intlist_of_string s = List.map int_of_string (words s)
 
@@ -753,7 +432,6 @@ let contains s1 s2 =
         try ignore (Str.search_forward re s1 0); true
         with Not_found -> false
 
-let has_ne sc = let r = try_all_freq sc in Printf.printf "\n--------\n%s\n^^^^^^^^^\n" r ; contains r "Exist"
 let has_ne sc = let r = try_all_freq sc in contains r "Exist"
 let has_neT sc = has_ne (transform_scores sc)
 	
@@ -901,7 +579,6 @@ let enumerate_ab inf =
 					let c_scores = transform_scores scores in
 					print_string ("\n\n---------------\nTASK " ^ (string_of_intlist [length; a; b]) ^ "\n");
 					try_all_freq c_scores; ()
-					(*print_string ("\n\nFOOO" ^ (try_all_freq c_scores) ^ "ENDFOOOO"); ()*)
 			done
 		done
 	done
@@ -909,6 +586,7 @@ let enumerate_ab inf =
 
 ;;
 
+(*Get and clear a character from a string, return true if it existed before clearing*)
 let get_opt c s =
 	try s.[String.index s c] <- ' '; true
 	with Not_found -> false
@@ -922,13 +600,13 @@ let rec fixstr_ s i j = if j >= String.length s then String.sub s 0 i else let (
 let fixstr = fun s -> fixstr_ (clear_equals s) 0 0
 
 let _ =
- 	Printf.printf "Content-type: text/plain TESSSST\n\n";
+ 	Printf.printf "Content-type: text/plain\n\n";
 	let qs_ = try 
 		(Sys.getenv "QUERY_STRING")
 		with Not_found -> (
 			try ( let opt = Sys.argv.(1) in
 				if ( opt = "ab" ) 
-				then  enumerate_ab 9999 ; opt 
+				then  enumerate_ab 9999 ; "1 0"
 			) with _ ->
 			self_diag (); "1 0") in
 	flush stdout;
@@ -940,9 +618,6 @@ let _ =
 		(if get_opt 'v' qs then 1 else 0);
 	let args = Str.split (Str.regexp "; *") qs in
 	let score_string = String.uppercase (List.hd args) in
-(*	if (score_string.[0] = 'C') then (
-		score_string.[0] <- ' '
-	);*)
 	let sc_ = intlist_of_string score_string in
 	let sc = if cumulative_scores then sc_ else transform_scores sc_ in
 	(*print_endline ("Cumulative Scores: " ^ (string_of_intlist sc));*)
