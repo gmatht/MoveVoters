@@ -151,24 +151,36 @@ let xvector_adjacent_n = fun afterb frq scores n ->
 	let scores_before = add_to_first afterb  moveself scores_before_ in
 	let scores_after_ = scoref (List.append frq_after (List.rev frq_before))  myscores in  
 	let scores_after = add_to_first beforeb moveself scores_after_ in  
+	assert (scores_after=scores_after_);
+	assert (scores_before=scores_before_);
+        let sum_scores=list_sumf (List.rev scores_before) scores_after in
+	let (sum_before, sum_after) =  split_list sum_scores 
+		(List.length frq_after) in
+		
 	let score_at_z = (
 		sum_listf (list_tl_n scores (sum_list frq_after)) +.
 		sum_listf (list_tl_n scores (sum_list frq_before)) 
 	) /. 2. in
-	let r = List.concat [ [score_at_z]; list_sumf (List.rev scores_before) scores_after ] in 
-	let _ = pr2 "\n\nAfter: %d\n frq: %s\n  before: %s\n  after:%s \n scores: %s\n n: %d\n r:%s \n"
+	let r = List.concat [ [score_at_z]; sum_after; sum_before ] in 
+	let _ = pr2 "\n\nScore_at_z: %f\n After: %d\n frq: %s\n  before: %s\n  after:%s \n scores: %s\n n: %d\n r:%s \n"
+                score_at_z 
 		after
 		(string_of_intlist frq) (string_of_intlist frq_before) (string_of_intlist frq_after)
 		(string_of_floatlist scores) n (string_of_floatlist r) in
-	let _ = pr2 "  scores_after_ %s\n  scores_after %s\n moveself: %f\n"
-		(string_of_floatlist scores_after_)
+	let _ = pr2 "  scores_after_ %s\n  scores_before %s\n moveself: %f\n"
+		(string_of_floatlist scores_before)
 		(string_of_floatlist scores_after)
 		moveself in
+	let _ = pr2 "sum_after:%s  sum_before:%s\n"
+		(string_of_floatlist sum_after) (string_of_floatlist sum_before) in
 	r;;
 
 let xvector__n frq_before frq_after myscores =
 	let myscores_before = List.rev (list_neg (scoref (List.append frq_before (List.rev frq_after)) myscores)) in
 	let myscores_after = (scoref (List.append frq_after (List.rev frq_before)) myscores) in  
+	pr2 "\n\nmyscores_before: %s \n myscores_after: %s\n" (string_of_floatlist myscores_before) (string_of_floatlist myscores_after);
+
+
 	let score_at_z = (
 		sum_listf (list_tl_n myscores (sum_list frq_after)) +.
 		sum_listf (list_tl_n myscores (sum_list frq_before)) 
@@ -176,14 +188,18 @@ let xvector__n frq_before frq_after myscores =
 	(*let score_at_z = if frq_after = [] then sum_listf myscores else 0. in*)
 	(*list_div frq_at (List.concat [ [score_at_z]; scores_before; [(score_move_self frq_before frq_at frq_after scores n)]; scores_after ]);;*)
 	(*List.concat [ [score_at_z];  myscores_before; [(score_move_self frq_before frq_after myscores)]; myscores_after ];;*)
-        let (pos_before, pos_after) = split_list (list_sumf myscores_before myscores_after) (List.length frq_after) in
-	List.concat [ [score_at_z];  pos_before; [0.]; pos_after ];;
+        let (pos_before, pos_after) = split_list (list_sumf (myscores_before) myscores_after) (List.length frq_after) in
+	List.concat [ [score_at_z];  pos_after; [0.]; pos_before ];;
 
 let xvector_at_n move_adj frq scores n = 
 	let (frq_before, x, frq_after) =  split_listt frq n in
         (* If the candidate moves to pos n, there will be one more candidate *)
 	let frq_at = x + move_adj in 
 	let myscores = smear_scores scores frq_at in
+	let _ = pr2 "\n\nfrq: %s\n  before: %s\n  after:%s \n scores: %s\n n: %d\n"
+		(string_of_intlist frq) (string_of_intlist frq_before) (string_of_intlist frq_after)
+		(string_of_floatlist scores) n in
+
 	if (!verbosity > 1 ) then (
 		print_int n;
 		print_endline "";
@@ -221,6 +237,12 @@ let xvector_diffs = fun oldfrq scores ->
 					l.contents <- (name,diff)::!l;
 					if (!verbosity > 1 ) then (
 						ignore (print_endline name);
+						Printf.printf "\tz";
+						for c = 0 to (List.length frq) - 1
+						do
+							Printf.printf "\t[%d]" c;
+						done;
+						Printf.printf "\n";
 						println_sfl "old" orig_xvect;
 						println_sfl "new" new_xvect;
 						println_sfl "gain" diff;
@@ -411,6 +433,7 @@ let try_all_freq sc =
 	let results = ref [] in
 	let f fr = if (List.length fr) > 1 then (
 		let fr_s = (string_of_intlist fr) ^ (string_repeat "\t" (len - List.length fr)) in
+		pr1 "\nBEGIN FRQ: %s\n" fr_s;
 		let report = get_report fr sc in
 		let line = (fr_s ^ "; " ^ report ^ "\n") in
 		if (!verbosity > 0) then (
@@ -452,95 +475,101 @@ let has_neT sc = has_ne (transform_scores sc)
 
 let self_diag () = (
 	slack := 0.0;
-	verbosity := 2;
+	(*verbosity := 2;*)
 	print_string("Beginning self diagnostics\n");
-	assert ((score_move_self [1] [2] [120.;120.;0.;0.]) = 60.);
-	(* here moving oneself to the right does not affect total 1st place vote, but
-	   increases second place vote by 1/2x as we lose 1/2x to the voters to the right
-           but gain 1/2x from the left *)
-	assert ( (xvector_adjacent_n true [1; 2] [120.; 120.; 0.; 0.] 0) = [0.; 0.; 120.]);
-	(* This represents a four candidate election. We consider a candidate infansemially to
-	to right of the leftmost candidate, and to the left of the two rightmost candidates
-	- score_at_z (0) because when all candidates are at zero our candidate gets none of the 1st and
-		2nd place vote.
-	- p1 (0) when p1 moves to the right we lose [1/2x] of the first place vote as we gain 1/2x
-		from the candidates to the right, but lose 1x to the candidate to the left as the candidate
-		to the left follows us right.
-		We also gain [1/2x] of the second place vote, gaining 1/2 of the second place
-		vote from the right voters without losing any second place votes.
-		120*(-1/2+1/2)  = 0
-	- p2 (120) As the candidates to the right move to the right, we gain [1/2x] of the first and second place
-		votes. 
-		120* (1/2+1/2) = 120 *)
-	assert ( (xvector_adjacent_n true [1; 2] [240.; 120.; 0.; 0.] 0) = [0.; -60.; 180.]);
-	(* score_at_z (0) as above
-	- p1: 120*((2*-1/2)+1/2) = 120(-1/2) = -60 
-	- p2: 120*((2+1/2)+1/2) = 180 *)
-	assert ( (xvector_at_n 0 [2; 2] [120.; 120.; 0.; 0.] 0) = [0.; 90.; 90.]);
-	assert ( (xvector_at_n 1 [1; 2] [120.; 120.; 0.; 0.] 0) = [0.; 90.; 90.]);
-	(* score_at_z (0) as above
-	- p1: moving right loses half the 1st place vote for the right member of the first group, but 
-		also gains half the 2nd place vote, canceling out
-		the left candiate gains 1x the 1st and 1/2 of the second place vote for a total of 3/2x of 
-		120. this averages to 120*3/4 or 90 
-		//average is (-1+2)/2=(1/2)
-		//or 1/2x to each candidate.
-	  p2: Moving right gives 1/2x 1st and 2nd to candidate c0.1 (right of leftmost group) and 
-	      gives 1/2x of the 2nd place vote to the candidate c0.0 (left of left group)
-	- p2: as with p1*)
-	assert ( (xvector_at_n 0 [2; 2] [120.; 120.; 0.; 0.] 1) = [180.; -90.; -90.]);
-	(* Similar to above, but 2nd candidate. At zero c1.1  gains all votes for total of 240, and
-	   c1.0 gains second place votes for total of 120 this averages to 180: 1x first place and 1x second place
-	   for total of 2x. Thus 1x per candidate in group *)
-	assert ( (xvector_at_n 0 [2; 1;  2] [120.; 120.; 0.; 0.; 0.] 1) = [0.; -120.; 0.; 120.]);
-	assert ( (xvector_at_n 0 [1; 3] [6.*.120.; 120.; 120.; 0.] 1) = [440.; -160.; -160.]); 
-	(* at_z c1.2 gets all of vote (6+1+1+0)=8
-		c1.1 gets (1+1+0)=2
-		c1.0 gets 1
-		avg = (8+2+1)*120/3 = (11*40)= 440 
-		p0: c1.0 loses 1/2x 1st place vote; no effect on 2nd+ etc. (6*60)
-			c1.1 loses 1/2 2nd+ place (60)
-			c1.2 loses 1/2 3rd+ place (60)
-		average of (6+1+1)*20 = 8*20=160
-		p1: affect on left wing vote the reverse ie +160 instead of -160
-			however c1.2 has 1x less vote in 1st place to the right
-				simply because there is 1x less to the right
-			c1.2 has 1x less 2nd+ place etc.
-			so -320 loss for total of (160-320 = -160)
-	*)
-	assert ( (xvector_at_n 0 [2; 2] [72.; 12.; 12.; 0.] 0) = [6.; 27.; 27.]);
-	(* score_at_z: [6] group gets third place vote of 12, both candidates get 12/2=6
-	   p1: moving right loses c0.1 1/2x 1st place (72) and gains 1/2x 2nd place (12) vote, (c0.1 gets all third place vote anyway)
-		 (-72/2+12/2) = 2(-18+3)= 2(-15)  
-	       moving right gets c0.0  1x 1st place vote and 1/2x 2nd+ and 3rd+
-	 	 (72+12/2+12/2) = 2(36+6=42)
-		Average is (42-15=27)
-	   p2: similar to above 
-	*)
-	assert ( (xvector_adjacent_n false [1; 2] [72.; 12.; 12.; 0.] 0) = [0.; 84.; 12.]);
-	(* score_at_z: by moving left of all other candidates, get 0 score at pos 0
-	   p1: moving right gets 1x of the first place vote (72), 1/2 of the 2nd and third place vote
-               thus (72+12/2+12/2) = 72+12 = 84 
- 	   p2: moving right gives none of the first place vote but gives 1/2 of the 2nd and 3rd place vote
-		i.e. (12/2+12/2) *)
 
-	assert ( (xvector_adjacent_n false [1; 2] [72.; 12.; 12.; 0.] 1) = [12.; -36.; 48.]);
-	(* score_at_z: [12] by moving left of rightmost other candidates, get all of 3rd place vote at pos 0
-		
-	   p1: moving right takes 1/2x of the first place vote (72) but none of the 2nd and third place vote
-               thus (-72/2)=-36  
- 	   p2: moving right increases the gap between the first candidate and gains 1/2 of first place vote,
-		 but gains 1x of the 2nd and 3rd place vote from the rightmost candidates
-		i.e. (72/2+12/2+12/2)=(36+12)=48 *)
-	assert ( (xvector_adjacent_n true [1; 2] [72.; 12.; 12.; 0.] 1) = [96.; -6.; -90.]);
-	(* score_at_z: [12] by moving right of rightmost other candidates, get all of the vote at pos 0
-		72+12+12=86
-		p1: Moving p1 forward reduces the 3rd place vote by 1/2, hence 12/2=6
-		p2: Moving p2 forward reduces the 1st and 2nd place vote by 1x and 3rd place by 1/2
-			hence -72-12-6=-90
-	*)
-	assert ( (xvector_at_n 0 [2; 2] [72.; 12.; 12.; 0.] 1) = [60.; -27.; -27.]);
-	(* at_z: the rightmost candiate would get the full 72+12+12=96
+
+
+(*
+Scale Factor: 24
+ (2) 2 -> 0.000000
+2 (2)  -> 0.000000
+
+
+        1       c1      c2      ...
+0
+2
+
+myscores        12.     0.      0.      0.      .
+0
+2
+
+myscores        12.     0.      0.      0.      .
+0->0
+old     6.      0.      0.      .
+new     6.      0.      0.      .
+gain    0.      0.      0.      .
+
+
+
+Score_at_z: 12.000000
+ After: 0
+ frq: 1 2
+  before: 
+  after:1       2 
+ scores: 24.    0.      0.      0.
+ n: 0
+ r:12.  12.     -12. 
+  scores_after_ 12.     0.
+  scores_after 12.      0.
+ moveself: 0.000000
+0->0-
+old     6.      0.      0.      .
+new     12.     12.     -12.    .
+gain    6.      12.     -12.    .
+
+
+
+Score_at_z: 0.000000
+ After: 1
+ frq: 1 2
+  before: 1
+  after:2 
+ scores: 24.    0.      0.      0.
+ n: 0
+ r:0.   12.     -12. 
+  scores_after_ 12.     0.
+  scores_after 12.      0.
+ moveself: 0.000000
+0->0+
+old     6.      0.      0.      .
+new     0.      12.     -12.    . <- should be 0 -12 12
+gain    -6.     12.     -12.    .
+
+1
+3
+*)
+
+(*Score_at_z: 2.000000
+ After: 0
+ frq: 0 1       1
+  before: 
+  after:0       1       1 
+ scores: 4.     0.      0.
+ n: 0
+ r:2.   -2.     2.      0. 
+  scores_after_ -2.     -0.     -0.
+  scores_before 0.      2.      0.
+ moveself: 0.000000
+sum_after:  sum_before:-2.      2.      0.
+0->0-
+        z       [0]     [1]     [2]
+old     2.      0.      -2.     2.      .
+new     2.      -2.     2.      0.      .
+gain    0.      -2.     4.      -2.     .
+*)
+assert (xvector_at_n 1 [0; 1; 1] [4.; 0.; 0.] 0 = [2.; 0.; 2.; -2.]);
+assert (xvector_adjacent_n false [0; 1; 1] [4.; 0.; 0.] 0 = [2.; 0.; 2.; -2.]);
+
+get_report [1;1;1] [1;0;0];
+assert false;
+assert (xvector_adjacent_n true [2; 2] [24.; 0. ; 0.; 0.] 0 = [ 0.; -12.; 12.]);
+
+
+
+
+	(*assert ( (xvector_at_n 0 [2; 2] [72.; 12.; 12.; 0.] 1) = [60.; -27.; -27.]);
+	 at_z: the rightmost candiate would get the full 72+12+12=96
 		the second would get 12+12. Between them they get the average of 36+12+12=60
 	   p2: moving p2 right reduces by a factor of 1/2x the amount 2nd votes for c1.0
 		left member of the cluster gets but increases the number of 1st votes by 1/2x.
@@ -556,12 +585,6 @@ let self_diag () = (
 		for left member increases 1st and 2nd place vote by 1/2x (72/2 +12/2)
 		giving average of (-72/2 -12/2)/2 = (-36-6)/2=(-18-3)=-21
 for the ... *)
-	assert ( has_neT [6; 1; 1; 0] );
-	assert ( not (has_ne [6; 1; 1; 0]) );
-	assert ( not (has_neT [2; 1; 1; 1; 1; 0])  ); (* if this one fails it means you probably haven't patched ocaml-glpk to use lpx_exact in place of lpx_simplex *)
-	assert ( has_neT [2; 2; 1; 1; 1; 0]  );
-	assert ( has_neT [10; 10; 4; 3; 3; 0]  );
-	assert ( has_neT [4; 3; 1; 1; 0; 0]  );
 	print_string ("Self diagnostic successful\n"));
 	exit 0;;
 
@@ -632,6 +655,7 @@ let _ =
 	if (get_opt 'S' qs) then slack := 1.0; 
 	verbosity := if get_opt 'V' qs then 2 else 
 		(if get_opt 'v' qs then 1 else 0);
+	if (get_opt 'T' qs) then self_diag ();
 	let args = Str.split (Str.regexp "; *") qs in
 	let score_string = String.uppercase (List.hd args) in
 	let sc_ = intlist_of_string score_string in
