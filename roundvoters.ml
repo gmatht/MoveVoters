@@ -149,6 +149,7 @@ let xvector_adjacent_n = fun afterb frq scores n ->
 	let beforeb = not afterb in
 	let scores_before_ = list_neg (scoref (List.append frq_before (List.rev frq_after)) myscores) in
 	let scores_before = add_to_first afterb  moveself scores_before_ in
+	pr2 "\nsa__: %s \n" ( string_of_intlist (List.append frq_after (List.rev frq_before)) );
 	let scores_after_ = scoref (List.append frq_after (List.rev frq_before))  myscores in  
 	let scores_after = add_to_first beforeb moveself scores_after_ in  
 	assert (scores_after=scores_after_);
@@ -156,24 +157,25 @@ let xvector_adjacent_n = fun afterb frq scores n ->
         let sum_scores=list_sumf (List.rev scores_before) scores_after in
 	let (sum_before, sum_after) =  split_list sum_scores 
 		(List.length frq_after) in
-		
 	let score_at_z = (
 		sum_listf (list_tl_n scores (sum_list frq_after)) +.
 		sum_listf (list_tl_n scores (sum_list frq_before)) 
 	) /. 2. in
-	let r = List.concat [ [score_at_z]; sum_after; sum_before ] in 
+	let r = List.concat [ [score_at_z]; sum_after; List.rev sum_before ] in 
+        pr2 "-- xvector_adjacent_n --\n";
 	let _ = pr2 "\n\nScore_at_z: %f\n After: %d\n frq: %s\n  before: %s\n  after:%s \n scores: %s\n n: %d\n r:%s \n"
                 score_at_z 
 		after
 		(string_of_intlist frq) (string_of_intlist frq_before) (string_of_intlist frq_after)
 		(string_of_floatlist scores) n (string_of_floatlist r) in
-	let _ = pr2 "  scores_after_ %s\n  scores_before %s\n moveself: %f\n"
+	pr2 "  scores_before_ %s\n  scores_after %s\n moveself: %f\n"
 		(string_of_floatlist scores_before)
 		(string_of_floatlist scores_after)
-		moveself in
-	let _ = pr2 "sum_after:%s  sum_before:%s\n"
-		(string_of_floatlist sum_after) (string_of_floatlist sum_before) in
-	r;;
+		moveself;
+	pr2 "sum_scores:%s\n" (string_of_floatlist sum_scores);
+	pr2 "sum_scores:%s  sum_before:%s\n" (string_of_floatlist sum_after) (string_of_floatlist sum_before);
+	r
+
 
 let xvector__n frq_before frq_after myscores =
 	let myscores_before = List.rev (list_neg (scoref (List.append frq_before (List.rev frq_after)) myscores)) in
@@ -188,8 +190,11 @@ let xvector__n frq_before frq_after myscores =
 	(*let score_at_z = if frq_after = [] then sum_listf myscores else 0. in*)
 	(*list_div frq_at (List.concat [ [score_at_z]; scores_before; [(score_move_self frq_before frq_at frq_after scores n)]; scores_after ]);;*)
 	(*List.concat [ [score_at_z];  myscores_before; [(score_move_self frq_before frq_after myscores)]; myscores_after ];;*)
-        let (pos_before, pos_after) = split_list (list_sumf (myscores_before) myscores_after) (List.length frq_after) in
-	List.concat [ [score_at_z];  pos_after; [0.]; pos_before ];;
+        let (pos_before, pos_after) = split_list (list_sumf myscores_before myscores_after) (List.length frq_after) in
+	pr2 "\n\npos_before: %s \n pos_after: %s\n" (string_of_floatlist (pos_before)) (string_of_floatlist pos_after);
+	let r = List.concat [ [score_at_z];  pos_after; [0.]; List.rev pos_before ] in
+	pr2 "r: %s\n"  ( string_of_floatlist r );
+	r
 
 let xvector_at_n move_adj frq scores n = 
 	let (frq_before, x, frq_after) =  split_listt frq n in
@@ -330,6 +335,8 @@ let round x = let r = floor ( x +. 0.5 ) in
 
 let slack = ref 0.0 (* Increase this to allow almost correct solutions? *)
 
+let no_one = ref false
+
 let get_lp fr_ sc_ myprim =
 	let epsilon=0.000 in
 	let (fr,sc) = normalise_scores fr_ sc_ in
@@ -349,8 +356,13 @@ let get_lp fr_ sc_ myprim =
 	let bound_00 = (Array.make siz 0.0) in
 	    bound_00.(1) <- 1.0; (* Ensure the first position is at most 0, and exactly 0 *)
 	let bound_1 = (Array.make siz 0.0) in
-	    bound_1.(siz-1) <-  1.0 ; (* Ensure that last position is at most 1, and thus all are at most 1 *)
-	let bounds_noslack0 = List.concat [bound_nogain; [(">=0",0,bound_0)]; [("<=1", 1,bound_1)]] in
+	let bounds_noslack0 = if !no_one then (
+		bound_1.(siz-1) <-  1000.0 ; (* Ensure that last position is at most 1, and thus all are at most 1 *)
+	        List.concat [bound_nogain; [(">=0",0,bound_0)]; [("<=0.999", 999,bound_1)]]
+	) else (
+		bound_1.(siz-1) <-  1.0 ; (* Ensure that last position is at most 1, and thus all are at most 1 *)
+	        List.concat [bound_nogain; [(">=0",0,bound_0)]; [("<=1", 1,bound_1)]] 
+ 	) in
 	let bounds_noslack1 = List.map (fun (name,a,b) -> (name, a, Array.append [|!slack|] b)) bounds_noslack0 in
 	let bounds = List.concat ([bounds_noslack1; bound_inorder]) in
 	if (!verbosity > 0) then dump_bounds bounds;
@@ -560,9 +572,9 @@ gain    0.      -2.     4.      -2.     .
 *)
 assert (xvector_at_n 1 [0; 1; 1] [4.; 0.; 0.] 0 = [2.; 0.; 2.; -2.]);
 assert (xvector_adjacent_n false [0; 1; 1] [4.; 0.; 0.] 0 = [2.; 0.; 2.; -2.]);
+exit 0;
 
 get_report [1;1;1] [1;0;0];
-assert false;
 assert (xvector_adjacent_n true [2; 2] [24.; 0. ; 0.; 0.] 0 = [ 0.; -12.; 12.]);
 
 
@@ -655,6 +667,7 @@ let _ =
 	if (get_opt 'S' qs) then slack := 1.0; 
 	verbosity := if get_opt 'V' qs then 2 else 
 		(if get_opt 'v' qs then 1 else 0);
+	if (get_opt 'N' qs) then no_one := true;
 	if (get_opt 'T' qs) then self_diag ();
 	let args = Str.split (Str.regexp "; *") qs in
 	let score_string = String.uppercase (List.hd args) in
