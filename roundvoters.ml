@@ -333,28 +333,37 @@ let round x = let r = floor ( x +. 0.5 ) in
 	assert (abs_float (r -. x) < 0.00001); 
 	r;;  
 
-let slack = ref 0.0 (* Increase this to allow almost correct solutions? *)
+let slack = ref 0.0 (* Increase this to attempt to make all inequalities strict. We already make candidate positions distinct so this should not be required.*)
 
 let no_one = ref false
 
+(* Creates an lp with variables
+epsilon p_0 p_1 ... p_n 
+p_i are distinct positions and epsilon is the minimum distance between them
+*)
 let get_lp fr_ sc_ myprim =
 	let epsilon=0.000 in
 	let (fr,sc) = normalise_scores fr_ sc_ in
 	let _ = assert_no_slope fr sc in
 	flush stdout;
-	let siz = 1+List.length fr in
+        let len_fr=List.length fr in
+	let siz = 1+len_fr in
 	let rec bound_inorder_ n = 
-		if n == 1 then []
+		if n == 1 
+		then []
 		else let a = Array.make siz 0.0 in
 			a.(n-1) <- 1.0;
 			a.(n) <- -1.0;
 			(Printf.sprintf "p_%d < p_%d" (n-1) n,0,(Array.append [|1.0|] a))::(bound_inorder_ (n-1)) in
-	let bound_inorder = bound_inorder_ ((List.length fr)) in (*Ensure monotonically increasing positions *)
+	let bound_inorder = bound_inorder_ len_fr in (*Ensure monotonically increasing positions *)
 	let bound_nogain = List.map (fun (name,x)-> (name,0,Array.of_list x)) (xvector_diffs fr sc) in
 	let bound_0 = (Array.make siz 0.0) in
 	    bound_0.(1) <- -1.0; (* Ensure the first position is atleast 0, and hence all other positions are aleast 0 *)
-	let bound_00 = (Array.make siz 0.0) in
-	    bound_00.(1) <- 1.0; (* Ensure the first position is at most 0, and exactly 0 *)
+(*	let bound_00 = (Array.make siz 0.0) in
+	    bound_00.(1) <- 1.0; (* Ensure the first position is at most 0, and exactly 0 *) *)
+	let bound_no1 = (Array.make (siz+1) 0.0) in
+	    bound_no1.(len_fr) <-  1.0;
+	    bound_no1.(siz)    <-  1.0; 
 	let bound_1 = (Array.make siz 0.0) in
 	let bounds_noslack0 = if !no_one then (
 		bound_1.(siz-1) <-  1000.0 ; (* Ensure that last position is at most 1, and thus all are at most 1 *)
@@ -364,7 +373,7 @@ let get_lp fr_ sc_ myprim =
 	        List.concat [bound_nogain; [(">=0",0,bound_0)]; [("<=1", 1,bound_1)]] 
  	) in
 	let bounds_noslack1 = List.map (fun (name,a,b) -> (name, a, Array.append [|!slack|] b)) bounds_noslack0 in
-	let bounds = List.concat ([bounds_noslack1; bound_inorder]) in
+	let bounds = List.concat ([bounds_noslack1; bound_inorder; [("<1", 1, bound_no1)] ]) in
 	if (!verbosity > 0) then dump_bounds bounds;
 	(*dump_bounds bounds;; *)
 	let vectors=List.map (fun (name,a,b) -> (Array.map round b)) bounds in
