@@ -362,7 +362,7 @@ let get_lp fr_ sc_ myprim =
 (*	let bound_00 = (Array.make siz 0.0) in
 	    bound_00.(1) <- 1.0; (* Ensure the first position is at most 0, and exactly 0 *) *)
 	let bound_no1 = (Array.make (siz+1) 0.0) in
-	    bound_no1.(len_fr) <-  1.0;
+	    bound_no1.(0) <-  1.0;
 	    bound_no1.(siz)    <-  1.0; 
 	let bound_1 = (Array.make siz 0.0) in
 	let bounds_noslack0 = if !no_one then (
@@ -581,10 +581,10 @@ gain    0.      -2.     4.      -2.     .
 *)
 assert (xvector_at_n 1 [0; 1; 1] [4.; 0.; 0.] 0 = [2.; 0.; 2.; -2.]);
 assert (xvector_adjacent_n false [0; 1; 1] [4.; 0.; 0.] 0 = [2.; 0.; 2.; -2.]);
-exit 0;
-
 get_report [1;1;1] [1;0;0];
 assert (xvector_adjacent_n true [2; 2] [24.; 0. ; 0.; 0.] 0 = [ 0.; -12.; 12.]);
+assert (contains "abc" "a");
+assert (contains (get_report [1;1;1;1;1] [1;0;0;0;0]) "Exist");
 
 
 
