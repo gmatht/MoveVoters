@@ -466,7 +466,7 @@ let try_all_freq sc =
 	) in 
 	let _ = iter_freq len f in
 	let out_string = ("\n\n" ^ String.concat "" !results) in
-	if (!verbosity > 0) then print_string out_string;
+	print_string out_string;
 	out_string
 
 

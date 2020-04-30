@@ -11,3 +11,10 @@ frap2: frap2.c
 
 ab_parsed.txt: ab.txt frap2 parse_ab.pl
 	perl parse_ab.pl < ab.txt | grep -v ^[23] | ./frap2 1000 > ab_parsed.txt || true
+
+roundvoters: roundvoters.ml
+	ocamlc -g -I $(INCDIRS)         glpk.cma str.cma   -o roundvoters roundvoters.ml 
+
+www: roundvoters movevoters
+	cp -p roundvoters /usr/lib/cgi-bin/roundvoters.cgi
+	cp -p movevoters  /usr/lib/cgi-bin/movevoters.cgi
