@@ -18,3 +18,4 @@ roundvoters: roundvoters.ml
 www: roundvoters movevoters
 	cp -p roundvoters /usr/lib/cgi-bin/roundvoters.cgi
 	cp -p movevoters  /usr/lib/cgi-bin/movevoters.cgi
+	cp -p roundvoters.html movevoters.html /var/www
